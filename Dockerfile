@@ -88,10 +88,15 @@ RUN mkdir ${FREEBSD_SYSROOT} && \
 
 # Configure and update `pkg`
 # (usage: pkg -r ${FREEBSD_SYSROOT} install ...)
+ENV PKG_ROOTDIR ${FREEBSD_SYSROOT}
 RUN mkdir -p ${FREEBSD_SYSROOT}/usr/local/etc && \
 	  echo "ABI = \"${FREEBSD_PKG_ABI}\"; REPOS_DIR = [\"${FREEBSD_SYSROOT}/etc/pkg\"]; REPO_AUTOUPDATE = NO; RUN_SCRIPTS = NO;" > ${FREEBSD_SYSROOT}/usr/local/etc/pkg.conf
 RUN ln -s ${FREEBSD_SYSROOT}/usr/share/keys /usr/share/keys
-RUN pkg -r ${FREEBSD_SYSROOT} update
+RUN mv /usr/local/sbin/pkg /usr/local/sbin/pkg.real && \
+    echo "#!/bin/sh" > /usr/local/sbin/pkg && \
+    echo "exec pkg.real -r ${PKG_ROOTDIR} \"\$@\"" >> /usr/local/sbin/pkg && \
+    chmod +x /usr/local/sbin/pkg
+RUN pkg update
 
 ### CLANG ###
 
