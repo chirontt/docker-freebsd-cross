@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-sysroot=/freebsd
-triple=x86_64-unknown-freebsd11
+sysroot=${1:-/freebsd}
+triple=${2:-x86_64-unknown-freebsd13}
 
 # Based on Rust's script
 # https://github.com/rust-lang/rust/blob/master/src/ci/docker/scripts/freebsd-toolchain.sh
