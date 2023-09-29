@@ -2,13 +2,13 @@
 
 ARG MAINTAINER="Didstopia <support@didstopia.com>"
 ARG BASE_IMAGE_NAME="alpine"
-ARG BASE_IMAGE_TAG="3.12"
+ARG BASE_IMAGE_TAG="3.18"
 
 ARG FREEBSD_VERSION_MAJOR="13"
-ARG FREEBSD_VERSION_MINOR="1"
+ARG FREEBSD_VERSION_MINOR="2"
 ARG FREEBSD_VERSION="${FREEBSD_VERSION_MAJOR}.${FREEBSD_VERSION_MINOR}-RELEASE"
 ARG FREEBSD_SYSROOT="/freebsd"
-ARG FREEBSD_PKG_VERSION="1.19.0"
+ARG FREEBSD_PKG_VERSION="1.20.7"
 ARG FREEBSD_PKG_ABI="FreeBSD:${FREEBSD_VERSION_MAJOR}:amd64"
 ARG CLANG_LINKS_TARGET="x86_64-unknown-freebsd${FREEBSD_VERSION_MAJOR}"
 
@@ -29,7 +29,8 @@ ARG CLANG_LINKS_TARGET
 ### DEPENDENCIES ###
 
 # Install various build tools and dependencies
-RUN apk add --no-cache \
+RUN apk add --quiet --no-cache --no-progress \
+      bash \
       curl \
       clang \
       meson \
@@ -64,25 +65,23 @@ RUN cd /pkg/pkg-* && \
     ln -sf clang /usr/bin/cc && cc --version && \
     export CFLAGS="-Wno-cpp -Wno-switch -D__BEGIN_DECLS='' -D__END_DECLS='' -DDEFFILEMODE='S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH' -D__GLIBC__" && \
     export LDFLAGS="-lfts" && \
-    ./configure --with-libarchive.pc && \
+    ./configure --quiet --with-libarchive.pc && \
     touch /usr/include/sys/unistd.h && \
     touch /usr/include/sys/sysctl.h && \
     sed -i'' -e '/#include "pkg.h"/i#include <bsd/stdlib.h>' libpkg/pkg_jobs_conflicts.c && \
     sed -i'' -e '/#include.*cdefs.h>/i#include <fcntl.h>' libpkg/flags.c && \
     sed -i'' -e '/#include <stdio.h>/i#include <stdarg.h>' libpkg/xmalloc.h && \
-    make -j $(nproc) && \
-    mkdir -p /usr/local/etc && \
-    make -j $(nproc) install && \
-    cd / && \
-    rm -rf /pkg /usr/local/sbin/pkg2ng && \
+    make && mkdir -p /usr/local/etc && make install && \
+    cd / && rm -rf /pkg /usr/local/sbin/pkg2ng && \
     unset CFLAGS LDFLAGS
 
 ### FREEBSD INSTALLATION ###
 
 # Download the FreeBSD base and install the libraries, include files and package keys etc.
 RUN mkdir ${FREEBSD_SYSROOT} && \
-	  curl -L https://download.freebsd.org/ftp/releases/amd64/${FREEBSD_VERSION}/base.txz | \
-		bsdtar -xf - -C ${FREEBSD_SYSROOT} ./lib ./usr/lib ./usr/libdata ./usr/include ./usr/share/keys ./etc
+    curl -L https://download.freebsd.org/ftp/releases/amd64/${FREEBSD_VERSION}/base.txz | \
+	bsdtar -xf - -C ${FREEBSD_SYSROOT} ./lib ./usr/lib ./usr/libdata ./usr/include ./usr/share/keys ./etc
+
 
 ### PKG CONFIGURATION ###
 
@@ -104,8 +103,7 @@ RUN pkg update
 # NOTE: clang++ should be able to find stdc++ (necessary for meson checks even without building any c++ code)
 ADD clang-links.sh /tmp/clang-links.sh
 RUN bash /tmp/clang-links.sh ${FREEBSD_SYSROOT} ${CLANG_LINKS_TARGET} && \
-    rm /tmp/clang-links.sh && \
-    ln -s libstdc++.so.6 /usr/lib/libstdc++.so
+    rm /usr/lib/libstdc++.so && ln -s libstdc++.so.6 /usr/lib/libstdc++.so
 
 ### PKG-CONFIG ###
 
