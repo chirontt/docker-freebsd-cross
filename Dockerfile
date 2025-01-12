@@ -1,32 +1,36 @@
 # syntax=docker/dockerfile:1
 
-ARG MAINTAINER="Didstopia <support@didstopia.com>"
 ARG BASE_IMAGE_NAME="alpine"
-ARG BASE_IMAGE_TAG="3.18"
+ARG BASE_IMAGE_TAG="3.19"
 
-ARG FREEBSD_VERSION_MAJOR="13"
+ARG FREEBSD_VERSION_MAJOR="14"
 ARG FREEBSD_VERSION_MINOR="2"
+ARG FREEBSD_TARGET="amd64"
+ARG FREEBSD_TARGET_ARCH="amd64"
 ARG FREEBSD_VERSION="${FREEBSD_VERSION_MAJOR}.${FREEBSD_VERSION_MINOR}-RELEASE"
 ARG FREEBSD_SYSROOT="/freebsd"
-ARG FREEBSD_PKG_VERSION="1.20.7"
-ARG FREEBSD_PKG_ABI="FreeBSD:${FREEBSD_VERSION_MAJOR}:amd64"
-ARG CLANG_LINKS_TARGET="x86_64-unknown-freebsd${FREEBSD_VERSION_MAJOR}"
+ARG FREEBSD_PKG_VERSION="1.21.3"
+ARG FREEBSD_PKG_ABI="FreeBSD:${FREEBSD_VERSION_MAJOR}:${FREEBSD_TARGET_ARCH}"
+ARG FREEBSD_PKG_JAVA="openjdk21"
+ARG CLANG_TARGET_ARCH="x86_64"
+ARG CLANG_LINKS_TARGET="${CLANG_TARGET_ARCH}-unknown-freebsd${FREEBSD_VERSION_MAJOR}"
 
-FROM --platform=amd64 ${BASE_IMAGE_NAME}:${BASE_IMAGE_TAG}
-LABEL maintainer ${MAINTAINER}
+FROM ${BASE_IMAGE_NAME}:${BASE_IMAGE_TAG}
 
 # Export the build arguments
 ARG FREEBSD_VERSION_MAJOR
 ARG FREEBSD_VERSION_MINOR
+ARG FREEBSD_TARGET
+ARG FREEBSD_TARGET_ARCH
 ARG FREEBSD_VERSION
 ARG FREEBSD_SYSROOT
 ARG FREEBSD_PKG_VERSION
 ARG FREEBSD_PKG_ABI
+ARG FREEBSD_PKG_JAVA
+ARG CLANG_TARGET_ARCH
 ARG CLANG_LINKS_TARGET
 
-
-
-### DEPENDENCIES ###
+### HOST DEPENDENCIES ###
 
 # Install various build tools and dependencies
 RUN apk add --quiet --no-cache --no-progress \
@@ -35,6 +39,7 @@ RUN apk add --quiet --no-cache --no-progress \
       clang \
       meson \
       gcc \
+      git \
       pkgconf \
       make \
       autoconf \
@@ -54,7 +59,7 @@ RUN apk add --quiet --no-cache --no-progress \
       libarchive-dev \
       libarchive-tools
 
-### PKG INSTALLATION ###
+### FreeBSD's PKG INSTALLATION on HOST ###
 
 # Download, build and install the FreeBSD `pkg` tool
 RUN mkdir /pkg && \
@@ -75,18 +80,29 @@ RUN cd /pkg/pkg-* && \
     cd / && rm -rf /pkg /usr/local/sbin/pkg2ng && \
     unset CFLAGS LDFLAGS
 
-### FREEBSD INSTALLATION ###
+### FREEBSD BASE INSTALLATION ###
 
 # Download the FreeBSD base and install the libraries, include files and package keys etc.
 RUN mkdir ${FREEBSD_SYSROOT} && \
-    curl -L https://download.freebsd.org/ftp/releases/amd64/${FREEBSD_VERSION}/base.txz | \
+    curl -L https://download.freebsd.org/ftp/releases/${FREEBSD_TARGET}/${FREEBSD_TARGET_ARCH}/${FREEBSD_VERSION}/base.txz | \
 	bsdtar -xf - -C ${FREEBSD_SYSROOT} ./lib ./usr/lib ./usr/libdata ./usr/include ./usr/share/keys ./etc
 
+# Since Alpine 3.20, 'bsdtar' has failed to untar the FreeBSD's base.txz file, so use 'tar' instead,
+# with absolute symlinks manually repaired.
+#RUN mkdir ${FREEBSD_SYSROOT}
+#RUN curl https://download.freebsd.org/ftp/releases/${FREEBSD_TARGET}/${FREEBSD_TARGET_ARCH}/${FREEBSD_VERSION}/base.txz -o /tmp/base.txz
+#RUN tar -xf /tmp/base.txz -C ${FREEBSD_SYSROOT} ./lib ./usr/lib ./usr/libdata ./usr/include ./usr/share/keys ./etc
+# Relink any absolute symlinks.
+#RUN find -L "${FREEBSD_SYSROOT}" -type l | while read -r broken_link; \
+#do \
+#    target="$(realpath "${FREBSD_SYSROOT}"/$(readlink "$broken_link"))"; \
+#    ln -fs "$target" "$broken_link"; \
+#done
 
-### PKG CONFIGURATION ###
+### FreeBSD's PKG CONFIGURATION ###
 
 # Configure and update `pkg`
-# (usage: pkg -r ${FREEBSD_SYSROOT} install ...)
+# (usage: pkg install ...)
 ENV PKG_ROOTDIR ${FREEBSD_SYSROOT}
 RUN mkdir -p ${FREEBSD_SYSROOT}/usr/local/etc && \
 	  echo "ABI = \"${FREEBSD_PKG_ABI}\"; REPOS_DIR = [\"${FREEBSD_SYSROOT}/etc/pkg\"]; REPO_AUTOUPDATE = NO; RUN_SCRIPTS = NO;" > ${FREEBSD_SYSROOT}/usr/local/etc/pkg.conf
@@ -95,15 +111,16 @@ RUN mv /usr/local/sbin/pkg /usr/local/sbin/pkg.real && \
     echo "#!/bin/sh" > /usr/local/sbin/pkg && \
     echo "exec pkg.real -r ${PKG_ROOTDIR} \"\$@\"" >> /usr/local/sbin/pkg && \
     chmod +x /usr/local/sbin/pkg
-RUN pkg update
+RUN pkg update -f
 
-### CLANG ###
+### CLANG on HOST to cross-compile to FreeBSD target ###
 
 # Make clang symlinks to cross-compile
 # NOTE: clang++ should be able to find stdc++ (necessary for meson checks even without building any c++ code)
 ADD clang-links.sh /tmp/clang-links.sh
-RUN bash /tmp/clang-links.sh ${FREEBSD_SYSROOT} ${CLANG_LINKS_TARGET} && \
-    rm /usr/lib/libstdc++.so && ln -s libstdc++.so.6 /usr/lib/libstdc++.so
+RUN bash /tmp/clang-links.sh ${FREEBSD_SYSROOT} ${CLANG_LINKS_TARGET}
+ENV CLANG=${CLANG_LINKS_TARGET}-clang
+ENV CPPLANG=${CLANG_LINKS_TARGET}-clang++
 
 ### PKG-CONFIG ###
 
@@ -118,10 +135,31 @@ ADD meson.cross /usr/local/share/meson/cross/freebsd
 # Use sed to replace meson.cross "x86_64-unknown-freebsd*-clang" and "x86_64-unknown-freebsd*-clang++" with the correct target
 RUN sed -i'' -e "s/x86_64-unknown-freebsd[0-9.]*-clang/${CLANG_LINKS_TARGET}-clang/g" /usr/local/share/meson/cross/freebsd && \
     sed -i'' -e "s/x86_64-unknown-freebsd[0-9.]*-clang++/${CLANG_LINKS_TARGET}-clang++/g" /usr/local/share/meson/cross/freebsd && \
+    sed -i'' -e "s/x86_64/${CLANG_TARGET_ARCH}/g" /usr/local/share/meson/cross/freebsd && \
     mkdir -p /tmp/cross-test && \
-    echo "project('cross-test', 'c')" > /tmp/cross-test/meson.build && \
+    echo "project('cross-test', 'c', version: '0.0.1-SNAPSHOT')" > /tmp/cross-test/meson.build && \
     echo "executable('cross-test', 'main.c')" >> /tmp/cross-test/meson.build && \
     echo "int main() { return 0; }" > /tmp/cross-test/main.c && \
-    meson --version && \
-    meson setup --cross-file freebsd /tmp/cross-test && \
-    rm -rf /tmp/cross-test
+    cd /tmp/cross-test && meson setup --cross-file freebsd build && \
+    cd / && rm -rf /tmp/cross-test
+
+### FreeBSD's JDK INSTALLATION ###
+
+RUN pkg install -y ${FREEBSD_PKG_JAVA}
+ENV FREEBSD_JAVA_HOME=${FREEBSD_SYSROOT}/usr/local/${FREEBSD_PKG_JAVA}
+
+### FreeBSD's GTK3 & GTK4 LIBRARIES' INSTALLATION ###
+
+# Install 'cairo' & 'GLU' dependencies
+RUN pkg install -y cairo libGLU
+
+# Install the GTK3 & GTK4 packages
+RUN pkg install -y gtk3
+RUN pkg install -y gtk4
+
+# Install 'webkit2' dependencies
+RUN pkg install -y webkit2-gtk3 webkit2-gtk4
+
+
+WORKDIR /workdir
+

@@ -3,7 +3,7 @@ c = '/usr/local/bin/x86_64-unknown-freebsd13-clang'
 cpp = '/usr/local/bin/x86_64-unknown-freebsd13-clang++'
 ar = '/usr/bin/ar'
 strip = '/usr/bin/strip'
-pkgconfig = '/usr/bin/pkgconf'
+pkg-config = '/usr/bin/pkg-config'
 
 [host_machine]
 system = 'freebsd'
