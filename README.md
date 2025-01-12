@@ -1,10 +1,10 @@
 [![unlicense](https://img.shields.io/badge/un-license-green.svg?style=flat)](http://unlicense.org)
 [
-![docker stars](https://img.shields.io/docker/stars/Didstopia/freebsd-cross.svg?style=flat)
-![docker pulls](https://img.shields.io/docker/pulls/Didstopia/freebsd-cross.svg?style=flat)
-](https://hub.docker.com/r/Didstopia/freebsd-cross/)
-[![docker build status](https://img.shields.io/docker/build/Didstopia/freebsd-cross.svg?style=flat)](https://hub.docker.com/r/Didstopia/freebsd-cross/builds/)
-[![docker image size](https://img.shields.io/microbadger/image-size/Didstopia/freebsd-cross.svg?style=flat)](https://microbadger.com/images/Didstopia/freebsd-cross)
+![docker stars](https://img.shields.io/docker/stars/didstopia/freebsd-cross.svg?style=flat)
+![docker pulls](https://img.shields.io/docker/pulls/didstopia/freebsd-cross.svg?style=flat)
+](https://hub.docker.com/r/didstopia/freebsd-cross/)
+[![docker build status](https://img.shields.io/docker/build/didstopia/freebsd-cross.svg?style=flat)](https://hub.docker.com/r/didstopia/freebsd-cross/builds/)
+[![docker image size](https://img.shields.io/microbadger/image-size/didstopia/freebsd-cross.svg?style=flat)](https://microbadger.com/images/didstopia/freebsd-cross)
 
 # docker-freebsd-cross
 
