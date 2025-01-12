@@ -1,36 +1,65 @@
 [![unlicense](https://img.shields.io/badge/un-license-green.svg?style=flat)](http://unlicense.org)
-[
-![docker stars](https://img.shields.io/docker/stars/Didstopia/freebsd-cross.svg?style=flat)
-![docker pulls](https://img.shields.io/docker/pulls/Didstopia/freebsd-cross.svg?style=flat)
-](https://hub.docker.com/r/Didstopia/freebsd-cross/)
-[![docker build status](https://img.shields.io/docker/build/Didstopia/freebsd-cross.svg?style=flat)](https://hub.docker.com/r/Didstopia/freebsd-cross/builds/)
-[![docker image size](https://img.shields.io/microbadger/image-size/Didstopia/freebsd-cross.svg?style=flat)](https://microbadger.com/images/Didstopia/freebsd-cross)
 
 # docker-freebsd-cross
 
-***NOTICE: This is a fork of [docker-freebsd-cross](https://github.com/valpackett/docker-freebsd-cross) by [valpackett](https://github.com/valpackett) and primarily adds support to target different FreeBSD versions.***
+***NOTICE: From the original [docker-freebsd-cross](https://github.com/valpackett/docker-freebsd-cross)
+by [valpackett](https://github.com/valpackett), which was enhanced by
+[Didstopia](https://github.com/Didstopia/docker-freebsd-cross), then further enhanced by
+[dsk799](https://github.com/dsk799/docker-freebsd-cross) which this fork is based on.***
 
-An Alpine based Docker image for cross-compiling to any version of FreeBSD (amd64) using clang.
+This fork primarily adds support to target different FreeBSD versions (default FreeBSD `14.2-RELEASE`)
+and architectures (default `x86_64` and/or `aarch64`).
 
-- Allows pkg dependency installation!
-- Configures pkgconf (pkg-config)!
-- Configures meson! (use `--cross-file freebsd`)
+----
+
+An Alpine-based Docker image for cross-compiling to any version of FreeBSD (amd64/arm64) using `clang`.
+
+- C/C++ cross-compilers are available via the `CLANG` and `CPPLANG` env variables
+- Allows `pkg` dependency installation!
+- Configures `pkgconf` (`pkg-config`)!
+- Configures `meson`! (use `--cross-file freebsd`)
+- GTK3 & GTK4 libraries for FreeBSD are installed in the image
+- OpenJDK 21 for FreeBSD is also installed in the image, and is available via the `FREEBSD_JAVA_HOME` env variable.
 
 ## Usage
 
+### `meson` cross build, for default `x86_64` architecture
+To build the image for default `x86_64` architecture, on a Linux/x86_64 box:
 ```docker
-FROM didstopia/freebsd-cross:latest
-RUN pkg -r /freebsd install -y \
-      libepoll-shim \
-      libudev-devd \
-      libevdev \
-      libwacom \
-      gtk3 \
-      libmtdev
-ADD . /build
-RUN cd /build && \
-	  meson build --cross-file freebsd -Ddocumentation=false -Dtests=false -Depoll-dir=/freebsd/usr/local/ && \
-	  ninja -Cbuild
+docker build -t "freebsd-cross-x86_64" .
+```
+And run a `meson` cross build to FreeBSD/x86_64:
+```docker
+docker run --rm --volume $(pwd):/workdir -it "freebsd-cross-x86_64" /bin/sh -c \
+'pkg install -y \
+    libepoll-shim \
+    libudev-devd \
+    libevdev \
+    libwacom \
+    libmtdev && \
+meson build --cross-file freebsd -Ddocumentation=false -Dtests=false -Depoll-dir=/freebsd/usr/local/ && \
+ninja -Cbuild'
+```
+
+### `meson` cross build, for `aarch64` architecture
+To build the image for `aarch64` architecture, on a Linux/aarch64 box:
+```docker
+docker build -t "freebsd-cross-aarch64" \
+    --build-arg FREEBSD_TARGET=arm64 \
+    --build-arg FREEBSD_TARGET_ARCH=aarch64 \
+    --build-arg CLANG_TARGET_ARCH=aarch64 .
+```
+And run a `meson` cross build to FreeBSD/aarch64:
+```docker
+docker run --rm --volume $(pwd):/workdir -it "freebsd-cross-aarch64" /bin/sh -c \
+'pkg install -y \
+    libepoll-shim \
+    libudev-devd \
+    libevdev \
+    libwacom \
+    libmtdev && \
+meson build --cross-file freebsd -Ddocumentation=false -Dtests=false -Depoll-dir=/freebsd/usr/local/ && \
+ninja -Cbuild'
 ```
 
 ## Contributing
@@ -39,7 +68,7 @@ Please feel free to submit pull requests!
 
 By participating in this project you agree to follow the [Contributor Code of Conduct](https://www.contributor-covenant.org/version/1/4/).
 
-[The list of contributors is available on GitHub](https://github.com/Didstopia/docker-freebsd-cross/graphs/contributors).
+[The list of contributors is available on GitHub](https://github.com/chirontt/docker-freebsd-cross/graphs/contributors).
 
 ## License
 
